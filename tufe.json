@@ -1,0 +1,14 @@
+{
+  "surum": 1,
+  "guncelleme": "2026-11-16",
+  "kaynak": "TÜİK yıllık TÜFE; TCMB Piyasa Katılımcıları Anketi (Kasım 2026)",
+  "gerceklesen": {
+    "2026-09": "29.73",
+    "2026-10": "29.77"
+  },
+  "beklenti": {
+    "2026-12": "30.04",
+    "2027-12": "23.57",
+    "2028-11": "18.02"
+  }
+}
