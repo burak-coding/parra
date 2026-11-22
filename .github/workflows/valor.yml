@@ -1,16 +1,18 @@
+# Parra valör tablosu (22 Kasım 2026): haftada bir TEFAS fon sayfalarından alış/satış valörü ve Borsa İstanbul takas
+# günü; fon/tr/valor.json'a yazar. Her çalışma bütün fonları yavaşça (2 sn arayla, ~35–40 dk) yeniler.
 name: Valör tablosu
 on:
   schedule:
-    - cron: "0 3 * * 0"       # Pazar 06:00 İstanbul
+    - cron: "0 8 * * 1"       # Pazartesi 11:00 İstanbul
   workflow_dispatch:
     inputs:
       en_cok:
-        description: "Yenilenecek en çok fon (ilk doldurma için 3000)"
-        default: "300"
+        description: "Yenilenecek en çok fon (varsayılan: hepsi)"
+        default: "3000"
 permissions:
   contents: write
 concurrency:
-  group: fon-fiyatlari
+  group: fon-fiyatlari        # fon fiyatlarıyla aynı anda depoya yazmasın
   cancel-in-progress: false
 jobs:
   guncelle:
@@ -18,14 +20,24 @@ jobs:
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Valörleri çek
-        run: python3 valor_guncelle.py --cikti fon/tr --en-cok "${{ github.event.inputs.en_cok || '300' }}"
+        run: python3 valor_guncelle.py --cikti fon/tr --en-cok "${{ github.event.inputs.en_cok || '3000' }}"
       - name: Değişiklikleri yaz
+        # Çalışırken depoya başka commit girdiyse (elle yükleme, öteki workflow) önce onu çekip üstüne koyar.
         run: |
           git config user.name "parra-fon-bot"
           git config user.email "actions@users.noreply.github.com"
           git add fon/tr/valor.json
-          git diff --cached --quiet || git commit -m "Valör tablosu: $(date -u +%Y-%m-%d)" && git push
+          git diff --cached --quiet && exit 0
+          git commit -m "Valör tablosu: $(date -u +%Y-%m-%d)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin "${{ github.ref_name }}" && git push origin HEAD:"${{ github.ref_name }}" && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep $((i * 10))
+          done
+          exit 1
