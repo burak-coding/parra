@@ -1,9 +1,10 @@
 # Parra valör tablosu (22 Kasım 2026): haftada bir TEFAS fon sayfalarından alış/satış valörü ve Borsa İstanbul takas
-# günü; fon/tr/valor.json'a yazar. Her çalışma bütün fonları yavaşça (2 sn arayla, ~35–40 dk) yeniler.
+# günü; fon/tr/valor.json'a yazar. Her çalıştırma en çok 45 dakika (2 sn arayla, en eski kontrol edilmiş fon önce);
+# pazartesi dört çalıştırmada bütün fonlar yenilenir.
 name: Valör tablosu
 on:
   schedule:
-    - cron: "0 8 * * 1"       # Pazartesi 11:00 İstanbul
+    - cron: "0 8,10,12,14 * * 1"   # Pazartesi 11:00, 13:00, 15:00, 17:00 İstanbul
   workflow_dispatch:
     inputs:
       en_cok:
@@ -17,7 +18,7 @@ concurrency:
 jobs:
   guncelle:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
