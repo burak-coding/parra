@@ -9,8 +9,9 @@
 Kaynaklar:
   - Fon: TEFAS fon sayfası (https://www.tefas.gov.tr/tr/fon-detayli-analiz/<KOD>), "Fon Alış Valörü" ve
     "Fon Satış Valörü". TEFAS'ın robots.txt'i bu sayfalara izin veriyor (yalnız /api/ yasak). Toplu liste yok; fon
-    başına bir sayfa. Valör nadiren değişiyor: her çalışmada en eski kontrol edilmiş `--en-cok` fon (varsayılan 300)
-    yenilenir, istekler arasında `--bekle` saniye (varsayılan 2). İlk doldurma için `--en-cok 3000`.
+    başına bir sayfa, istekler arasında `--bekle` saniye (varsayılan 2). Her çalıştırma en çok `--sure` dakika
+    (varsayılan 45) çalışıp bulduğunu yazar; en eski kontrol edilmiş fon önce. Pazartesi dört kez çalışarak (11, 13,
+    15, 17 İstanbul) bütün fonları aynı gün yeniler.
   - BIST: Borsa İstanbul "Takas Esasları" sayfasındaki "Takas günü T+n" cümlesi; okunamazsa önceki değer (yoksa 2).
   - Yabancı hisse: ABD T+1 (28 Mayıs 2024'ten beri); sayfası olmadığından betikte sabit.
 
@@ -18,9 +19,9 @@ Uygulamada alışta para her zaman hemen çıkar (kullanıcı, 22 Kasım 2026); 
 TEFAS'ın uyarısı: valör talimat saatine ve tatillere göre değişir, kurucu değiştirebilir — tablo varsayılan öneri.
 
 Kullanım (site deposunun kökünde; fon/tr/fonlar.json'u fon_guncelle.py yazar):
-  python3 scripts/valor_guncelle.py
-  python3 scripts/valor_guncelle.py --en-cok 3000      # ilk doldurma
-  python3 scripts/valor_guncelle.py --dene sayfa.html  # yalnız ayrıştırıcıyı dene, ağ yok
+  python3 valor_guncelle.py
+  python3 valor_guncelle.py --en-cok 50        # yalnız en eski kontrol edilmiş 50 fon
+  python3 valor_guncelle.py --dene sayfa.html  # yalnız ayrıştırıcıyı dene, ağ yok
 Yalnız standart kütüphane; ağ hatasında var olan dosya bozulmaz (yazma atomik), okunamayan fonun eski değeri kalır.
 """
 import argparse
@@ -43,15 +44,15 @@ SATIS = re.compile(r">\s*Fon Satış Valörü\s*</p>\s*<p[^>]*>\s*(\d{1,2})\s*</
 TAKAS = re.compile(r"Takas günü\s*T\s*\+\s*(\d)")
 
 
-def getir(url, deneme=3):
+def getir(url, deneme=2):
     for i in range(deneme):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=BASLIK), timeout=60) as y:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=BASLIK), timeout=20) as y:
                 return y.read().decode("utf-8", errors="replace")
         except Exception:
             if i == deneme - 1:
                 raise
-            time.sleep(10 * (i + 1))
+            time.sleep(5)
 
 
 def fon_valoru(sayfa):
@@ -85,8 +86,9 @@ def yaz(yol, veri):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cikti", default="fon/tr")
-    ap.add_argument("--en-cok", type=int, default=300, help="bu çalışmada yenilenecek en çok fon")
+    ap.add_argument("--en-cok", type=int, default=3000, help="bu çalışmada yenilenecek en çok fon (varsayılan: hepsi)")
     ap.add_argument("--bekle", type=float, default=2.0, help="istekler arası saniye")
+    ap.add_argument("--sure", type=float, default=45, help="en çok çalışma süresi (dakika); dolunca bulunanlar yazılır")
     ap.add_argument("--dene", help="yalnız bu HTML dosyasını ayrıştır")
     a = ap.parse_args()
 
@@ -120,7 +122,15 @@ def main():
         sys.exit("fon/tr/fonlar.json yok ya da boş: önce fon_guncelle.py")
     sira = sorted(kodlar, key=lambda k: (fonlar.get(k, [None, None, ""])[2], k))[: max(a.en_cok, 0)]
     okunan = okunamayan = 0
+    baslangic = time.monotonic()
     for i, kod in enumerate(sira):
+        # Süre sınırı (22 Kasım 2026): GitHub çalıştırıcısı 2 saati aşan işte koptu; bulunanlar yazılır, kalanı bir
+        # sonraki çalıştırmada (en eski kontrol edilmiş önce).
+        if time.monotonic() - baslangic > a.sure * 60:
+            print(f"süre doldu: {i}/{len(sira)} fon bu çalıştırmada", file=sys.stderr)
+            break
+        if i and i % 100 == 0:
+            print(f"{i}/{len(sira)}", file=sys.stderr)
         if i:
             time.sleep(a.bekle)
         try:
