@@ -1,3 +1,5 @@
+# Parra fon fiyatları (A34, 21 Kasım 2026): iş günleri fonfiyat.com.tr'den (kaynak TEFAS) fon/tr/ altındaki JSON'ları
+# yeniler ve depoya yazar; GitHub Pages yayımlar. Kaynak ~11:30'da (İstanbul) güncellenir.
 name: Fon fiyatları
 on:
   schedule:
@@ -15,14 +17,24 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Fiyatları çek
         run: python3 fon_guncelle.py --cikti fon/tr --doldur 150
       - name: Değişiklikleri yaz
+        # Çalışırken depoya başka commit girdiyse (elle yükleme, öteki workflow) önce onu çekip üstüne koyar.
         run: |
           git config user.name "parra-fon-bot"
           git config user.email "actions@users.noreply.github.com"
           git add fon
-          git diff --cached --quiet || git commit -m "Fon fiyatları: $(date -u +%Y-%m-%d)" && git push
+          git diff --cached --quiet && exit 0
+          git commit -m "Fon fiyatları: $(date -u +%Y-%m-%d)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin "${{ github.ref_name }}" && git push origin HEAD:"${{ github.ref_name }}" && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep $((i * 10))
+          done
+          exit 1
