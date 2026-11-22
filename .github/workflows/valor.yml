@@ -1,0 +1,31 @@
+name: Valör tablosu
+on:
+  schedule:
+    - cron: "0 3 * * 0"       # Pazar 06:00 İstanbul
+  workflow_dispatch:
+    inputs:
+      en_cok:
+        description: "Yenilenecek en çok fon (ilk doldurma için 3000)"
+        default: "300"
+permissions:
+  contents: write
+concurrency:
+  group: fon-fiyatlari
+  cancel-in-progress: false
+jobs:
+  guncelle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Valörleri çek
+        run: python3 valor_guncelle.py --cikti fon/tr --en-cok "${{ github.event.inputs.en_cok || '300' }}"
+      - name: Değişiklikleri yaz
+        run: |
+          git config user.name "parra-fon-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add fon/tr/valor.json
+          git diff --cached --quiet || git commit -m "Valör tablosu: $(date -u +%Y-%m-%d)" && git push
