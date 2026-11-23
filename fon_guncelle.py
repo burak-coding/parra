@@ -3,6 +3,7 @@
 
   fon/tr/fonlar.json        sabit bilgiler: kod, ad, kurucu, kategori, tip (YAT/EMK)
   fon/tr/fiyatlar.json      bütün fonların son fiyatı, önceki günü ve fiyat tarihi
+  fon/tr/surum.json         fiyatların son değiştiği an (UTC); uygulama önce bunu okur, yeniyse fiyatları çeker
   fon/tr/gecmis/<KOD>/<YIL>.json
                             fon başına, yıl yıl günlük fiyat geçmişi. Her çalışmada yalnız içinde bulunulan yılın
                             dosyasına bugünkü fiyat eklenir (git geçmişi şişmesin); eksik geçmiş yavaş yavaş
@@ -65,6 +66,13 @@ def degistiyse_yaz(yol: pathlib.Path, veri) -> bool:
     return True
 
 
+def surum_yaz(kok: pathlib.Path, degisti: bool, an: str, tarih: str):
+    """Kullanıcı (23 Kasım 2026): "uygulama güncel veri varsa çeksin". Fiyatlar değiştiyse (ya da dosya yoksa) anı yazar."""
+    yol = kok / "surum.json"
+    if degisti or oku(yol) is None:
+        yaz(yol, {"surum": 1, "fiyatlar": an, "tarih": tarih})
+
+
 def oku(yol: pathlib.Path):
     try:
         return json.loads(yol.read_text(encoding="utf-8"))
@@ -105,8 +113,9 @@ def main():
     son_tarih = max(v[2] for v in fiyatlar.values())
 
     degistiyse_yaz(kok / "fonlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK, "fonlar": sabit})
-    degistiyse_yaz(kok / "fiyatlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK, "tarih": son_tarih,
-                                           "fiyatlar": fiyatlar})
+    degisti = degistiyse_yaz(kok / "fiyatlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK,
+                                                     "tarih": son_tarih, "fiyatlar": fiyatlar})
+    surum_yaz(kok, degisti, bugun, son_tarih)
 
     # Geçmiş: bugünkü fiyat her fonun o yılki dosyasına; eksik geçmiş `--doldur` kadar fon için history.csv'den.
     tam_yol = kok / "gecmis" / "_tam.json"
