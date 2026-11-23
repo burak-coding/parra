@@ -1,10 +1,9 @@
-# Parra valör tablosu (22 Kasım 2026): haftada bir TEFAS fon sayfalarından alış/satış valörü ve Borsa İstanbul takas
-# günü; fon/tr/valor.json'a yazar. Her çalıştırma en çok 45 dakika (2 sn arayla, en eski kontrol edilmiş fon önce);
-# pazartesi dört çalıştırmada bütün fonlar yenilenir.
+# Parra valör tablosu (22 Kasım 2026): TEFAS fon sayfalarından alış/satış valörü ve Borsa İstanbul takas günü;
+# fon/tr/valor.json'a yazar. 23 Kasım 2026 (kullanıcı): valör seyrek değişiyor, ayda bir elle yeterli — zamanlama yok.
+# GitHub'da TEFAS sayfaları valörsüz geldi (ilk 30 fonda okunamazsa betik durur, teşhis satırı yazar); öyleyse tablo
+# Türkiye'deki bir makinede üretilip valor.json elle yüklenir.
 name: Valör tablosu
 on:
-  schedule:
-    - cron: "0 8,10,12,14 * * 1"   # Pazartesi 11:00, 13:00, 15:00, 17:00 İstanbul
   workflow_dispatch:
     inputs:
       en_cok:
@@ -12,8 +11,10 @@ on:
         default: "3000"
 permissions:
   contents: write
+# Ayrı kuyruk: 45 dakikalık valör işi saatlik fon fiyatlarını bekletmesin (bekleyen tek iş kalıyor, öncekini düşürüyor).
+# Farklı dosyalara yazıyorlar; push öncesi pull --rebase çakışmayı çözüyor.
 concurrency:
-  group: fon-fiyatlari        # fon fiyatlarıyla aynı anda depoya yazmasın
+  group: valor
   cancel-in-progress: false
 jobs:
   guncelle:

@@ -2,9 +2,10 @@
 # yeniler ve depoya yazar; GitHub Pages yayımlar. Kaynak ~11:30'da (İstanbul) güncellenir.
 name: Fon fiyatları
 on:
+  # 23 Kasım 2026 (kullanıcı): iş günleri 09:37–19:37 İstanbul saatte bir; fiyat değişmediyse commit yok. Kaynak saatte
+  # birden sık çekilmesin istiyor. GitHub zamanlamayı garanti etmiyor, saat başı yoğunlukta düşürebiliyor: dakika 37.
   schedule:
-    - cron: "15 9 * * 1-5"    # 12:15 İstanbul
-    - cron: "30 15 * * 1-5"   # 18:30 İstanbul
+    - cron: "37 6-16 * * 1-5"
   workflow_dispatch: {}
 permissions:
   contents: write
