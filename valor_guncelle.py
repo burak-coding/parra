@@ -44,15 +44,34 @@ SATIS = re.compile(r">\s*Fon Satış Valörü\s*</p>\s*<p[^>]*>\s*(\d{1,2})\s*</
 TAKAS = re.compile(r"Takas günü\s*T\s*\+\s*(\d)")
 
 
-def getir(url, deneme=2):
+def yanit(url, deneme=2):
+    """(metin, HTTP durumu, yönlendirmeden sonraki adres)."""
     for i in range(deneme):
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=BASLIK), timeout=20) as y:
-                return y.read().decode("utf-8", errors="replace")
+                return y.read().decode("utf-8", errors="replace"), y.status, y.geturl()
         except Exception:
             if i == deneme - 1:
                 raise
             time.sleep(5)
+
+
+def getir(url, deneme=2):
+    return yanit(url, deneme)[0]
+
+
+def teshis(kod, durum, url, sayfa):
+    """Valörü okunamayan sayfanın tek satırlık özeti (23 Kasım 2026: GitHub'da 1010 fonun hiçbiri okunamadı, yerelde
+    okunuyordu; sunucuya gelen sayfayı görmek için)."""
+    m = re.search(r"<title[^>]*>(.*?)</title>", sayfa, re.S | re.I)
+    baslik = re.sub(r"\s+", " ", m.group(1)).strip()[:120] if m else "-"
+    valor = "var" if "Valör" in sayfa else "yok"
+    return f"{kod}: HTTP {durum}, {url}, {len(sayfa)} karakter, başlık: {baslik}, 'Valör' {valor}"
+
+
+def erken_dur(i, okunan, esik):
+    """İlk `esik` fonun hiçbiri okunamadıysa dur (yerelde ilk 30 fonun 20'si okunuyor): süre boşa gitmesin."""
+    return esik > 0 and okunan == 0 and i >= esik
 
 
 def fon_valoru(sayfa):
@@ -89,6 +108,8 @@ def main():
     ap.add_argument("--en-cok", type=int, default=3000, help="bu çalışmada yenilenecek en çok fon (varsayılan: hepsi)")
     ap.add_argument("--bekle", type=float, default=2.0, help="istekler arası saniye")
     ap.add_argument("--sure", type=float, default=45, help="en çok çalışma süresi (dakika); dolunca bulunanlar yazılır")
+    ap.add_argument("--erken-dur", type=int, default=30,
+                    help="ilk bu kadar fonun hiçbiri okunamazsa dur (0: kapalı)")
     ap.add_argument("--dene", help="yalnız bu HTML dosyasını ayrıştır")
     a = ap.parse_args()
 
@@ -122,6 +143,7 @@ def main():
         sys.exit("fon/tr/fonlar.json yok ya da boş: önce fon_guncelle.py")
     sira = sorted(kodlar, key=lambda k: (fonlar.get(k, [None, None, ""])[2], k))[: max(a.en_cok, 0)]
     okunan = okunamayan = 0
+    ilk_teshis = None
     baslangic = time.monotonic()
     for i, kod in enumerate(sira):
         # Süre sınırı (22 Kasım 2026): GitHub çalıştırıcısı 2 saati aşan işte koptu; bulunanlar yazılır, kalanı bir
@@ -129,12 +151,20 @@ def main():
         if time.monotonic() - baslangic > a.sure * 60:
             print(f"süre doldu: {i}/{len(sira)} fon bu çalıştırmada", file=sys.stderr)
             break
+        if erken_dur(i, okunan, a.erken_dur):
+            print(ilk_teshis or "teşhis yok", file=sys.stderr)
+            sys.exit(f"ilk {i} fonun hiçbirinin valörü okunamadı; TEFAS bu sunucuya valörsüz sayfa veriyor olabilir"
+                     " — dosya yazılmadı")
         if i and i % 100 == 0:
             print(f"{i}/{len(sira)}", file=sys.stderr)
         if i:
             time.sleep(a.bekle)
         try:
-            v = fon_valoru(getir(TEFAS.format(kod)))
+            sayfa, durum, son_url = yanit(TEFAS.format(kod))
+            v = fon_valoru(sayfa)
+            if not v and ilk_teshis is None:
+                ilk_teshis = teshis(kod, durum, son_url, sayfa)
+                print(f"teşhis: {ilk_teshis}", file=sys.stderr)
         except Exception as e:
             v = None
             print(f"uyarı: {kod} alınamadı ({e})", file=sys.stderr)

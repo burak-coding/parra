@@ -9,9 +9,9 @@
                             history.csv'den doldurulur (gecmis/_tam.json doldurulan fonların listesi).
 
 Kullanım (site deposunun kökünde):
-  python3 scripts/fon_guncelle.py                    # fiyatlar + bugünkü geçmiş + en çok 150 fonun geçmiş doldurması
-  python3 scripts/fon_guncelle.py --doldur 0         # geçmiş doldurmadan
-  python3 scripts/fon_guncelle.py --cikti /yol/fon   # başka klasöre
+  python3 fon_guncelle.py                    # fiyatlar + bugünkü geçmiş + en çok 150 fonun geçmiş doldurması
+  python3 fon_guncelle.py --doldur 0         # geçmiş doldurmadan
+  python3 fon_guncelle.py --cikti /yol/fon   # başka klasöre
 
 Kaynağın koşulları (fonfiyat.com.tr/api): anahtar yok, ticari kullanım serbest, saatte birden sık çekilmez, kaynak
 belirtilir ("Veri: fonfiyat.com.tr / TEFAS"). Veri iş günlerinde ~11:30'da (İstanbul) güncellenir. Yalnız standart
@@ -54,6 +54,17 @@ def yaz(yol: pathlib.Path, veri):
     os.replace(gecici, yol)
 
 
+def degistiyse_yaz(yol: pathlib.Path, veri) -> bool:
+    """Saatlik çalıştırma (23 Kasım 2026): yalnız `guncelleme` damgası değişecekse yazma; boş commit ve Pages
+    yayını olmasın. Yazdıysa True."""
+    eski = oku(yol)
+    if isinstance(eski, dict) and {k: v for k, v in eski.items() if k != "guncelleme"} == \
+            {k: v for k, v in veri.items() if k != "guncelleme"}:
+        return False
+    yaz(yol, veri)
+    return True
+
+
 def oku(yol: pathlib.Path):
     try:
         return json.loads(yol.read_text(encoding="utf-8"))
@@ -93,9 +104,9 @@ def main():
     sabit.sort(key=lambda x: x["kod"])
     son_tarih = max(v[2] for v in fiyatlar.values())
 
-    yaz(kok / "fonlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK, "fonlar": sabit})
-    yaz(kok / "fiyatlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK, "tarih": son_tarih,
-                                "fiyatlar": fiyatlar})
+    degistiyse_yaz(kok / "fonlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK, "fonlar": sabit})
+    degistiyse_yaz(kok / "fiyatlar.json", {"surum": 1, "guncelleme": bugun, "kaynak": KAYNAK, "tarih": son_tarih,
+                                           "fiyatlar": fiyatlar})
 
     # Geçmiş: bugünkü fiyat her fonun o yılki dosyasına; eksik geçmiş `--doldur` kadar fon için history.csv'den.
     tam_yol = kok / "gecmis" / "_tam.json"
@@ -133,7 +144,8 @@ def main():
             except Exception as e:
                 print(f"{kod}: geçmiş alınamadı ({e})", file=sys.stderr)
         yil_yaz(kod, gunler)
-    yaz(tam_yol, sorted(tam))
+    if sorted(tam) != sorted(oku(tam_yol) or []):
+        yaz(tam_yol, sorted(tam))
 
     print(f"{len(fiyatlar)} fon; son fiyat günü {son_tarih}; {doldurulan} fonun geçmişi dolduruldu")
 
